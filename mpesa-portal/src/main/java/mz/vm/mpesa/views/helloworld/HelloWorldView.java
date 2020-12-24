@@ -3,14 +3,17 @@ package mz.vm.mpesa.views.helloworld;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.combobox.ComboBox;
+import com.vaadin.flow.component.datepicker.DatePicker;
 import com.vaadin.flow.component.dependency.CssImport;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.Label;
+import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.data.binder.Binder;
 import com.vaadin.flow.data.binder.BinderValidationStatus;
 import com.vaadin.flow.data.binder.BindingValidationStatus;
+import com.vaadin.flow.data.validator.DateRangeValidator;
 import com.vaadin.flow.data.validator.RegexpValidator;
 import com.vaadin.flow.data.validator.StringLengthValidator;
 import com.vaadin.flow.data.value.ValueChangeMode;
@@ -19,14 +22,18 @@ import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouteAlias;
 import mz.vm.mpesa.service.ClientServiceCaller;
 import mz.vm.mpesa.service.DocumentServiceCaller;
+import mz.vm.mpesa.views.Utils.Util;
 import mz.vm.mpesa.views.main.MainView;
 import mz.vm.portal.ClientDTO;
 import mz.vm.portal.DocumentTypeDTO;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
+import static mz.vm.mpesa.views.Utils.Util.convertLocalDateToDate;
 
 @Route(value = "Hello", layout = MainView.class)
 @PageTitle("MPESA PORTAL")
@@ -45,7 +52,7 @@ public class HelloWorldView extends HorizontalLayout {
     private TextField firstName;
     private TextField lastName;
     private TextField phone;
-    //    private DatePicker birthDate;
+    private DatePicker birthDate;
     private Label infoLabel;
     private TextField docNumber;
     private ComboBox<DocumentTypeDTO> docType;
@@ -90,19 +97,27 @@ public class HelloWorldView extends HorizontalLayout {
                 .bind(ClientDTO::getLastname, ClientDTO::setLastname);
         binder.forField(docNumber).asRequired("Preencha o numero").bind(ClientDTO::getDocNumber, ClientDTO::setDocNumber);
         binder.forField(docType).asRequired("Seleccione o documento").bind(ClientDTO::getDocumentTypeDTO, ClientDTO::setDocumentTypeDTO);
-//        binder.forField(birthDate).asRequired("Seleccione a Data").withConverter(convertLocalDateToDate())
-//                .bind(ClientDTO::getBirthDate, ClientDTO::setBirthDate);
+        binder.forField(birthDate).asRequired("Seleccione a Data").withValidator(new DateRangeValidator("Data de Nascimento Invalido", LocalDate.now().minusYears(16),LocalDate.now()))
+                .bind(ClientDTO::getBirthDate, ClientDTO::setBirthDate);
         binder.forField(phone).asRequired()
                 .withValidator(new RegexpValidator("preencha o numero de Telefone", "8(4|5)[0-9]{7}$"))
                 .bind(ClientDTO::getCellphone, ClientDTO::setCellphone);
     }
 
     private void buttonsEvents() {
+        docType.addValueChangeListener(event->{
+            if (event.getValue().getName().equals("NUIT"))
+                binder.forField(docNumber).asRequired().withValidator(new RegexpValidator("Preencha Nuit Valido","\\d{9}")).bind(ClientDTO::getDocNumber, ClientDTO::setDocNumber);
+            else if (event.getValue().getName().equals("BI"))
+                binder.forField(docNumber).asRequired().withValidator(new RegexpValidator("Preencha BI Valido","\\d{12}[A-Z]")).bind(ClientDTO::getDocNumber, ClientDTO::setDocNumber);
+            else
+                binder.forField(docNumber).asRequired().withValidator(new RegexpValidator("Preencha Carta Valido","\\d{12}[A-Z]")).bind(ClientDTO::getDocNumber, ClientDTO::setDocNumber);
+        });
         save.addClickListener(event -> {
             if (binder.writeBeanIfValid(clientDTOBeingEdited)) {
+                clientDTOBeingEdited.setCellphone("258"+clientDTOBeingEdited.getCellphone());
                 ClientDTO saved = clientServiceCaller.save(clientDTOBeingEdited);
-                infoLabel.setText("Gravado com Sucesso: "+saved);
-//                List<ClientDTO> clientDTOS = clientServiceCaller.finAll();
+                infoLabel.setText("Cliente Gravado com Sucesso, Nome: " + saved.getName());
             } else {
                 BinderValidationStatus<ClientDTO> validate = binder.validate();
                 String errorText = validate.getFieldValidationStatuses()
@@ -134,9 +149,9 @@ public class HelloWorldView extends HorizontalLayout {
     private void defineForm() {
         layoutWithBinder.addFormItem(firstName, "Nome");
         layoutWithBinder.addFormItem(lastName, "Apelido");
-//        layoutWithBinder.addFormItem(birthDate, "Data de Nascimento");
+        layoutWithBinder.addFormItem(birthDate, "Data de Nascimento");
         layoutWithBinder.addFormItem(docType, "Tipo de Documento");
-        layoutWithBinder.addFormItem(phone, "Numero de Telefone");
+        layoutWithBinder.addFormItem(phone, "Numero de Telefone (258)");
         layoutWithBinder.addFormItem(docNumber, "Numero de Documento");
     }
 
@@ -144,7 +159,8 @@ public class HelloWorldView extends HorizontalLayout {
         firstName = new TextField();
         lastName = new TextField();
         phone = new TextField();
-//        birthDate = new DatePicker();
+        phone.setMaxLength(9);
+        birthDate = new DatePicker();
         docNumber = new TextField();
         infoLabel = new Label();
         docType = new ComboBox();
